@@ -6,6 +6,7 @@ import InvoiceForm from './pages/InvoiceForm'
 import InvoicePreview from './pages/InvoicePreview'
 import CustomersPage from './pages/CustomersPage'
 import BankDetailsPage from './pages/BankDetailsPage'
+import ShippingAddressesPage from './pages/ShippingAddressesPage'
 import Layout from './components/Layout'
 
 function ProtectedRoute({ children }) {
@@ -25,6 +26,7 @@ export default function App() {
       <Route path="/invoice/:id/preview" element={<ProtectedRoute><InvoicePreview /></ProtectedRoute>} />
       <Route path="/customers" element={<ProtectedRoute><Layout><CustomersPage /></Layout></ProtectedRoute>} />
       <Route path="/bank-details" element={<ProtectedRoute><Layout><BankDetailsPage /></Layout></ProtectedRoute>} />
+      <Route path="/shipping-addresses" element={<ProtectedRoute><Layout><ShippingAddressesPage /></Layout></ProtectedRoute>} />
     </Routes>
   )
 }

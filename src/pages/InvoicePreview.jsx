@@ -22,7 +22,7 @@ export default function InvoicePreview() {
 
   const load = async () => {
     setLoading(true)
-    const { data: inv } = await supabase.from('invoices').select('*, customers(*), bank_details(*)').eq('id', id).single()
+    const { data: inv } = await supabase.from('invoices').select('*, customers(*), bank_details(*), shipping_addresses(*)').eq('id', id).single()
     const { data: lines } = await supabase.from('invoice_lines').select('*').eq('invoice_id', id).order('sort_order')
     const { data: comp } = await supabase.from('company_settings').select('*').single()
 
@@ -40,7 +40,7 @@ export default function InvoicePreview() {
 
     const element = pdfRef.current
     const opt = {
-      margin: [15, 15, 12, 15],
+      margin: 0,
       filename: `${data.invoice.invoice_number.replace(/\//g, '-')}.pdf`,
       image: { type: 'jpeg', quality: 0.98 },
       html2canvas: { scale: 2, useCORS: true, logging: false },
@@ -65,6 +65,7 @@ export default function InvoicePreview() {
   const { invoice: inv, lines, company: cmp } = data
   const cust = inv.customers || {}
   const bank = inv.bank_details
+  const ship = inv.shipping_addresses
 
   return (
     <div className="invoice-preview-page">
@@ -107,14 +108,30 @@ export default function InvoicePreview() {
             </div>
           </div>
 
-          {/* Receiver Address (Push to right) */}
-          <div className="receiver-address">
-            <div className="receiver-details">
-              <div className="detail-row">{cust.name}</div>
-              {cust.street && <div className="detail-row">{cust.street}</div>}
-              {cust.city && <div className="detail-row">{cust.city}</div>}
-              {cust.country && <div className="detail-row">{cust.country}</div>}
-              {cust.vat_number && <div className="detail-row">VAT: {cust.vat_number}</div>}
+          {/* Addresses Row */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
+            {/* Left side: Shipping Address */}
+            <div className="receiver-address" style={{ marginBottom: 0, justifyContent: 'flex-start' }}>
+              {ship && (
+                <div className="receiver-details" style={{ textAlign: 'left' }}>
+                  <div className="detail-row" style={{ fontWeight: 700, marginBottom: 4 }}>Shipping Address:</div>
+                  <div className="detail-row">{ship.name}</div>
+                  {ship.address_line1 && <div className="detail-row">{ship.address_line1}</div>}
+                  {ship.address_line2 && <div className="detail-row">{ship.address_line2}</div>}
+                  <div className="detail-row">{ship.city}, {ship.country}</div>
+                </div>
+              )}
+            </div>
+
+            {/* Right side: Billing Data */}
+            <div className="receiver-address" style={{ marginBottom: 0, justifyContent: 'flex-end' }}>
+              <div className="receiver-details" style={{ textAlign: 'left' }}>
+                <div className="detail-row">{cust.name}</div>
+                {cust.street && <div className="detail-row">{cust.street}</div>}
+                {cust.city && <div className="detail-row">{cust.city}</div>}
+                {cust.country && <div className="detail-row">{cust.country}</div>}
+                {cust.vat_number && <div className="detail-row">VAT: {cust.vat_number}</div>}
+              </div>
             </div>
           </div>
 

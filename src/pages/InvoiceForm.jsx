@@ -32,6 +32,7 @@ export default function InvoiceForm() {
 
   const [customers, setCustomers] = useState([])
   const [banks, setBanks] = useState([])
+  const [shippingAddresses, setShippingAddresses] = useState([])
   const [saving, setSaving] = useState(false)
   const [dupError, setDupError] = useState(false)
   const [loading, setLoading] = useState(isEdit)
@@ -45,12 +46,14 @@ export default function InvoiceForm() {
     beneficiary_text: '',
     customer_id: '',
     bank_detail_id: '',
+    shipping_address_id: '',
   })
   const [lines, setLines] = useState([EMPTY_LINE()])
 
   useEffect(() => {
     supabase.from('customers').select('*').order('name').then(({ data }) => setCustomers(data || []))
     supabase.from('bank_details').select('*').order('beneficiary_name').then(({ data }) => setBanks(data || []))
+    supabase.from('shipping_addresses').select('*').order('name').then(({ data }) => setShippingAddresses(data || []))
     if (isEdit) loadInvoice()
   }, [id])
 
@@ -68,6 +71,7 @@ export default function InvoiceForm() {
         beneficiary_text: inv.beneficiary_text || '',
         customer_id: inv.customer_id || '',
         bank_detail_id: inv.bank_detail_id || '',
+        shipping_address_id: inv.shipping_address_id || '',
       })
       setLines((invLines || []).map(l => ({ ...l, _id: Math.random().toString(36).slice(2) })))
     }
@@ -109,6 +113,7 @@ export default function InvoiceForm() {
       ...totals,
       customer_id: form.customer_id || null,
       bank_detail_id: form.bank_detail_id || null,
+      shipping_address_id: form.shipping_address_id || null,
       updated_at: new Date().toISOString(),
     }
 
@@ -223,7 +228,7 @@ export default function InvoiceForm() {
             </div>
           </div>
 
-          <div className="form-grid form-grid-2">
+          <div className="form-grid form-grid-2" style={{ marginBottom: 16 }}>
             <div className="form-group">
               <label className="form-label">PO Reference</label>
               <input className="form-input" value={form.po_reference} onChange={e => setField('po_reference', e.target.value)} placeholder="e.g. 405-2544113-6735515" />
@@ -232,6 +237,16 @@ export default function InvoiceForm() {
               <label className="form-label">Beneficiary</label>
               <input className="form-input" value={form.beneficiary_text} onChange={e => setField('beneficiary_text', e.target.value)} placeholder="e.g. Amna Moyelh Altijarih, Ash Sharekah" />
             </div>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Shipping Address</label>
+            <select className="form-select" value={form.shipping_address_id} onChange={e => setField('shipping_address_id', e.target.value)}>
+              <option value="">— Select Shipping Address (Optional) —</option>
+              {shippingAddresses.map(a => (
+                <option key={a.id} value={a.id}>{a.name} — {a.address_line1}, {a.city}</option>
+              ))}
+            </select>
           </div>
         </div>
 

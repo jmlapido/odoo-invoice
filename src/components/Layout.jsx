@@ -1,6 +1,6 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { FileText, Users, Building2, LayoutDashboard, LogOut } from 'lucide-react'
+import { FileText, Users, Building2, MapPin, LayoutDashboard, LogOut } from 'lucide-react'
 
 export default function Layout({ children }) {
   const { logout } = useAuth()
@@ -45,6 +45,11 @@ export default function Layout({ children }) {
           <NavLink to="/bank-details" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>
             <Building2 size={16} />
             Bank Details
+          </NavLink>
+          
+          <NavLink to="/shipping-addresses" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>
+            <MapPin size={16} />
+            Shipping Addresses
           </NavLink>
         </nav>
 
