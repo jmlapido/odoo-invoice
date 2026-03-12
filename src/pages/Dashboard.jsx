@@ -12,8 +12,7 @@ export default function Dashboard() {
   const [sortConfig, setSortConfig] = useState({ key: 'created_at', direction: 'desc' })
   const [filterOpen, setFilterOpen] = useState(false)
   const [filters, setFilters] = useState({
-    minTotal: '',
-    maxTotal: '',
+    customerName: '',
     startDate: '',
     endDate: ''
   })
@@ -56,15 +55,14 @@ export default function Dashboard() {
       inv.invoice_number?.toLowerCase().includes(search.toLowerCase()) ||
       inv.customers?.name?.toLowerCase().includes(search.toLowerCase())
     
-    const matchesTotal = 
-      (!filters.minTotal || Number(inv.total) >= Number(filters.minTotal)) &&
-      (!filters.maxTotal || Number(inv.total) <= Number(filters.maxTotal))
+    const matchesCustomer = 
+      !filters.customerName || (inv.customers?.name || '').toLowerCase().includes(filters.customerName.toLowerCase())
     
     const matchesDate = 
       (!filters.startDate || inv.invoice_date >= filters.startDate) &&
       (!filters.endDate || inv.invoice_date <= filters.endDate)
 
-    return matchesSearch && matchesTotal && matchesDate
+    return matchesSearch && matchesCustomer && matchesDate
   })
 
   const sorted = [...filtered].sort((a, b) => {
@@ -134,25 +132,14 @@ export default function Dashboard() {
           {filterOpen && (
             <div style={{ padding: '0 20px 16px', display: 'flex', gap: 16, flexWrap: 'wrap', borderBottom: '1px solid var(--border)' }}>
               <div className="form-group" style={{ marginBottom: 0 }}>
-                <label className="label-sm">Min Total</label>
+                <label className="label-sm">Customer Name</label>
                 <input 
-                  type="number" 
+                  type="text" 
                   className="input-sm" 
-                  placeholder="Min"
-                  value={filters.minTotal}
-                  onChange={e => setFilters({...filters, minTotal: e.target.value})}
-                  style={{ width: 100 }}
-                />
-              </div>
-              <div className="form-group" style={{ marginBottom: 0 }}>
-                <label className="label-sm">Max Total</label>
-                <input 
-                  type="number" 
-                  className="input-sm" 
-                  placeholder="Max"
-                  value={filters.maxTotal}
-                  onChange={e => setFilters({...filters, maxTotal: e.target.value})}
-                  style={{ width: 100 }}
+                  placeholder="Filter by customer..."
+                  value={filters.customerName}
+                  onChange={e => setFilters({...filters, customerName: e.target.value})}
+                  style={{ width: 180 }}
                 />
               </div>
               <div className="form-group" style={{ marginBottom: 0 }}>
@@ -176,7 +163,7 @@ export default function Dashboard() {
               <div style={{ display: 'flex', alignItems: 'flex-end' }}>
                 <button 
                   className="btn btn-ghost btn-sm" 
-                  onClick={() => setFilters({ minTotal: '', maxTotal: '', startDate: '', endDate: '' })}
+                  onClick={() => setFilters({ customerName: '', startDate: '', endDate: '' })}
                 >
                   Reset
                 </button>

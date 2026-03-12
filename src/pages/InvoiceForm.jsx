@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useParams, useBlocker } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { calcLine, calcTotals, todayISO, formatAED } from '../lib/utils'
@@ -39,6 +39,8 @@ export default function InvoiceForm() {
 
   const [initialForm, setInitialForm] = useState(null)
   const [initialLines, setInitialLines] = useState(null)
+  const isSavingRef = useRef(false)
+  const [saveAction, setSaveAction] = useState(null)
 
   const [form, setForm] = useState({
     invoice_number: '',
@@ -78,6 +80,7 @@ export default function InvoiceForm() {
 
   useEffect(() => {
     const handleBeforeUnload = (e) => {
+      if (isSavingRef.current) return
       const changes = getChanges()
       if (changes.length > 0) {
         e.preventDefault()
@@ -152,7 +155,7 @@ export default function InvoiceForm() {
   }
 
   const blocker = useBlocker(({ currentValue, nextLocation }) => {
-    return initialForm && initialLines && getChanges().length > 0
+    return !isSavingRef.current && initialForm && initialLines && getChanges().length > 0
   })
 
   const loadInvoice = async () => {
@@ -202,13 +205,23 @@ export default function InvoiceForm() {
 
   const totals = calcTotals(lines)
 
-  const handleSave = async (andPreview = false) => {
+  const handleSaveClick = (andPreview = false) => {
     if (!form.invoice_number.trim()) { toast.error('Invoice number is required'); return }
     if (!form.invoice_date) { toast.error('Invoice date is required'); return }
     if (!form.customer_id) { toast.error('Please select a customer'); return }
     if (dupError) { toast.error('Invoice number already exists'); return }
 
+    const changes = getChanges()
+    if (changes.length > 0) {
+      setSaveAction({ andPreview })
+    } else {
+      executeSave(andPreview)
+    }
+  }
+
+  const executeSave = async (andPreview = false, customNavPath = null) => {
     setSaving(true)
+    isSavingRef.current = true
 
     const invoicePayload = {
       ...form,
@@ -263,8 +276,11 @@ export default function InvoiceForm() {
     setInitialForm(JSON.parse(JSON.stringify(form)))
     setInitialLines(lines.map(l => ({ ...JSON.parse(JSON.stringify(l)), _id: null })))
 
-    if (andPreview) navigate(`/invoice/${invoiceId}/preview`)
+    if (customNavPath) navigate(customNavPath)
+    else if (andPreview) navigate(`/invoice/${invoiceId}/preview`)
     else navigate('/dashboard')
+
+    setTimeout(() => { isSavingRef.current = false }, 100)
   }
 
   if (loading) return (
@@ -277,9 +293,9 @@ export default function InvoiceForm() {
     <>
       <ToastContainer />
 
-      {blocker.state === 'blocked' && (
+      {(blocker.state === 'blocked' || saveAction) && (
         <div className="modal-overlay">
-          <div className="modal" style={{ maxWidth: 450 }}>
+          <div className="modal" style={{ maxWidth: 550 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, color: 'var(--warning)' }}>
               <AlertTriangle size={24} />
               <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text)' }}>Unsaved Changes</div>
@@ -304,13 +320,39 @@ export default function InvoiceForm() {
               </ul>
             </div>
 
-            <div className="modal-actions">
-              <button className="btn btn-ghost" onClick={() => blocker.reset()}>
-                Stay and Edit
+            <div className="modal-actions" style={{ justifyContent: 'space-between', width: '100%' }}>
+              <button className="btn btn-ghost" onClick={() => {
+                if (blocker.state === 'blocked') blocker.reset();
+                else setSaveAction(null);
+              }}>
+                Cancel
               </button>
-              <button className="btn btn-danger" onClick={() => blocker.proceed()}>
-                Discard Changes
-              </button>
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button className="btn btn-danger" onClick={() => {
+                  if (blocker.state === 'blocked') blocker.proceed();
+                  else {
+                    // Discard changes and stay
+                    setForm(initialForm);
+                    setLines(initialLines);
+                    setSaveAction(null);
+                  }
+                }}>
+                  Discard Changes
+                </button>
+                <button className="btn btn-primary" onClick={() => {
+                  if (blocker.state === 'blocked') {
+                    const dest = blocker.location?.pathname;
+                    blocker.reset();
+                    executeSave(false, dest);
+                  } else {
+                    const preview = saveAction.andPreview;
+                    setSaveAction(null);
+                    executeSave(preview);
+                  }
+                }}>
+                  <Save size={14} /> Save Changes and Close
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -321,10 +363,10 @@ export default function InvoiceForm() {
           <div className="page-subtitle">TAX Invoice</div>
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
-          <button className="btn btn-secondary" onClick={() => handleSave(false)} disabled={saving}>
+          <button className="btn btn-secondary" onClick={() => handleSaveClick(false)} disabled={saving}>
             <Save size={14} /> {saving ? 'Saving…' : 'Save'}
           </button>
-          <button className="btn btn-primary" onClick={() => handleSave(true)} disabled={saving}>
+          <button className="btn btn-primary" onClick={() => handleSaveClick(true)} disabled={saving}>
             <Eye size={14} /> Save & Preview
           </button>
         </div>
