@@ -3,12 +3,20 @@ import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { formatDate, formatAED } from '../lib/utils'
 import { ToastContainer, toast } from '../components/Toast'
-import { Plus, FileText, Eye, Pencil, Trash2, Search } from 'lucide-react'
+import { Plus, FileText, Eye, Pencil, Trash2, Search, ArrowUpDown, ChevronUp, ChevronDown, Filter } from 'lucide-react'
 
 export default function Dashboard() {
   const [invoices, setInvoices] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
+  const [sortConfig, setSortConfig] = useState({ key: 'created_at', direction: 'desc' })
+  const [filterOpen, setFilterOpen] = useState(false)
+  const [filters, setFilters] = useState({
+    minTotal: '',
+    maxTotal: '',
+    startDate: '',
+    endDate: ''
+  })
 
   useEffect(() => { loadInvoices() }, [])
 
@@ -22,6 +30,19 @@ export default function Dashboard() {
     setLoading(false)
   }
 
+  const handleSort = (key) => {
+    let direction = 'asc'
+    if (sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc'
+    }
+    setSortConfig({ key, direction })
+  }
+
+  const getSortIcon = (key) => {
+    if (sortConfig.key !== key) return <ArrowUpDown size={14} className="ml-1 opacity-50" />
+    return sortConfig.direction === 'asc' ? <ChevronUp size={14} className="ml-1" /> : <ChevronDown size={14} className="ml-1" />
+  }
+
   const handleDelete = async (id, number) => {
     if (!confirm(`Delete invoice ${number}? This cannot be undone.`)) return
     const { error } = await supabase.from('invoices').delete().eq('id', id)
@@ -30,10 +51,36 @@ export default function Dashboard() {
     loadInvoices()
   }
 
-  const filtered = invoices.filter(inv =>
-    inv.invoice_number?.toLowerCase().includes(search.toLowerCase()) ||
-    inv.customers?.name?.toLowerCase().includes(search.toLowerCase())
-  )
+  const filtered = invoices.filter(inv => {
+    const matchesSearch = 
+      inv.invoice_number?.toLowerCase().includes(search.toLowerCase()) ||
+      inv.customers?.name?.toLowerCase().includes(search.toLowerCase())
+    
+    const matchesTotal = 
+      (!filters.minTotal || Number(inv.total) >= Number(filters.minTotal)) &&
+      (!filters.maxTotal || Number(inv.total) <= Number(filters.maxTotal))
+    
+    const matchesDate = 
+      (!filters.startDate || inv.invoice_date >= filters.startDate) &&
+      (!filters.endDate || inv.invoice_date <= filters.endDate)
+
+    return matchesSearch && matchesTotal && matchesDate
+  })
+
+  const sorted = [...filtered].sort((a, b) => {
+    let aVal = a[sortConfig.key]
+    let bVal = b[sortConfig.key]
+
+    // Handle nested customer name
+    if (sortConfig.key === 'customer') {
+      aVal = a.customers?.name || ''
+      bVal = b.customers?.name || ''
+    }
+
+    if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1
+    if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1
+    return 0
+  })
 
   const totalRevenue = invoices.reduce((sum, inv) => sum + Number(inv.total || 0), 0)
 
@@ -75,7 +122,67 @@ export default function Dashboard() {
                 onChange={e => setSearch(e.target.value)}
               />
             </div>
+            <button 
+              className={`btn ${filterOpen ? 'btn-primary' : 'btn-ghost'}`}
+              onClick={() => setFilterOpen(!filterOpen)}
+              title="Filter"
+            >
+              <Filter size={15} />
+            </button>
           </div>
+
+          {filterOpen && (
+            <div style={{ padding: '0 20px 16px', display: 'flex', gap: 16, flexWrap: 'wrap', borderBottom: '1px solid var(--border)' }}>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="label-sm">Min Total</label>
+                <input 
+                  type="number" 
+                  className="input-sm" 
+                  placeholder="Min"
+                  value={filters.minTotal}
+                  onChange={e => setFilters({...filters, minTotal: e.target.value})}
+                  style={{ width: 100 }}
+                />
+              </div>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="label-sm">Max Total</label>
+                <input 
+                  type="number" 
+                  className="input-sm" 
+                  placeholder="Max"
+                  value={filters.maxTotal}
+                  onChange={e => setFilters({...filters, maxTotal: e.target.value})}
+                  style={{ width: 100 }}
+                />
+              </div>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="label-sm">From Date</label>
+                <input 
+                  type="date" 
+                  className="input-sm" 
+                  value={filters.startDate}
+                  onChange={e => setFilters({...filters, startDate: e.target.value})}
+                />
+              </div>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="label-sm">To Date</label>
+                <input 
+                  type="date" 
+                  className="input-sm" 
+                  value={filters.endDate}
+                  onChange={e => setFilters({...filters, endDate: e.target.value})}
+                />
+              </div>
+              <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+                <button 
+                  className="btn btn-ghost btn-sm" 
+                  onClick={() => setFilters({ minTotal: '', maxTotal: '', startDate: '', endDate: '' })}
+                >
+                  Reset
+                </button>
+              </div>
+            </div>
+          )}
 
           {loading ? (
             <div style={{ padding: 48, textAlign: 'center' }}><span className="spinner" /></div>
@@ -91,16 +198,26 @@ export default function Dashboard() {
               <table>
                 <thead>
                   <tr>
-                    <th>Invoice #</th>
-                    <th>Customer</th>
-                    <th>Invoice Date</th>
-                    <th>Due Date</th>
-                    <th className="text-right">Total</th>
+                    <th onClick={() => handleSort('invoice_number')} style={{ cursor: 'pointer', userSelect: 'none' }}>
+                      <div style={{ display: 'flex', alignItems: 'center' }}>Invoice # {getSortIcon('invoice_number')}</div>
+                    </th>
+                    <th onClick={() => handleSort('customer')} style={{ cursor: 'pointer', userSelect: 'none' }}>
+                      <div style={{ display: 'flex', alignItems: 'center' }}>Customer {getSortIcon('customer')}</div>
+                    </th>
+                    <th onClick={() => handleSort('invoice_date')} style={{ cursor: 'pointer', userSelect: 'none' }}>
+                      <div style={{ display: 'flex', alignItems: 'center' }}>Invoice Date {getSortIcon('invoice_date')}</div>
+                    </th>
+                    <th onClick={() => handleSort('due_date')} style={{ cursor: 'pointer', userSelect: 'none' }}>
+                      <div style={{ display: 'flex', alignItems: 'center' }}>Due Date {getSortIcon('due_date')}</div>
+                    </th>
+                    <th className="text-right" onClick={() => handleSort('total')} style={{ cursor: 'pointer', userSelect: 'none' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>Total {getSortIcon('total')}</div>
+                    </th>
                     <th className="text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map(inv => (
+                  {sorted.map(inv => (
                     <tr key={inv.id}>
                       <td>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
