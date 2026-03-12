@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useBlocker } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { calcLine, calcTotals, todayISO, formatAED } from '../lib/utils'
 import { ToastContainer, toast } from '../components/Toast'
-import { Plus, Trash2, Save, Eye, ChevronDown } from 'lucide-react'
+import { Plus, Trash2, Save, Eye, ChevronDown, AlertTriangle, X } from 'lucide-react'
 
 const calculateDueDate = (dateStr) => {
   if (!dateStr) return ''
@@ -37,6 +37,9 @@ export default function InvoiceForm() {
   const [dupError, setDupError] = useState(false)
   const [loading, setLoading] = useState(isEdit)
 
+  const [initialForm, setInitialForm] = useState(null)
+  const [initialLines, setInitialLines] = useState(null)
+
   const [form, setForm] = useState({
     invoice_number: '',
     invoice_date: todayISO(),
@@ -55,14 +58,109 @@ export default function InvoiceForm() {
     supabase.from('bank_details').select('*').order('beneficiary_name').then(({ data }) => setBanks(data || []))
     supabase.from('shipping_addresses').select('*').order('name').then(({ data }) => setShippingAddresses(data || []))
     if (isEdit) loadInvoice()
+    else {
+      const defaultForm = {
+        invoice_number: '',
+        invoice_date: todayISO(),
+        due_date: calculateDueDate(todayISO()),
+        source: '',
+        po_reference: '',
+        beneficiary_text: '',
+        customer_id: '',
+        bank_detail_id: '',
+        shipping_address_id: '',
+      }
+      const defaultLines = [EMPTY_LINE()]
+      setInitialForm(JSON.parse(JSON.stringify(defaultForm)))
+      setInitialLines(JSON.parse(JSON.stringify(defaultLines)))
+    }
   }, [id])
+
+  useEffect(() => {
+    const handleBeforeUnload = (e) => {
+      const changes = getChanges()
+      if (changes.length > 0) {
+        e.preventDefault()
+        e.returnValue = ''
+      }
+    }
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [form, lines, initialForm, initialLines])
+
+  const getChanges = () => {
+    if (!initialForm || !initialLines) return []
+    const changes = []
+
+    const fieldLabels = {
+      invoice_number: 'Invoice Number',
+      invoice_date: 'Invoice Date',
+      due_date: 'Due Date',
+      source: 'Source',
+      po_reference: 'PO Reference',
+      beneficiary_text: 'Beneficiary',
+      customer_id: 'Customer',
+      bank_detail_id: 'Bank Details',
+      shipping_address_id: 'Shipping Address'
+    }
+
+    Object.keys(fieldLabels).forEach(key => {
+      let v1 = String(initialForm[key] || '').trim()
+      let v2 = String(form[key] || '').trim()
+      
+      if (v1 !== v2) {
+        let label = fieldLabels[key]
+        if (key === 'customer_id') {
+          const c1 = customers.find(c => String(c.id) === v1)?.name || 'None'
+          const c2 = customers.find(c => String(c.id) === v2)?.name || 'None'
+          if (c1 !== c2) changes.push(`Customer changed from "${c1}" to "${c2}"`)
+        } else if (key === 'bank_detail_id') {
+          const b1 = banks.find(b => String(b.id) === v1)?.beneficiary_name || 'None'
+          const b2 = banks.find(b => String(b.id) === v2)?.beneficiary_name || 'None'
+          if (b1 !== b2) changes.push(`Bank Details changed from "${b1}" to "${b2}"`)
+        } else if (key === 'shipping_address_id') {
+          const s1 = shippingAddresses.find(s => String(s.id) === v1)?.name || 'None'
+          const s2 = shippingAddresses.find(s => String(s.id) === v2)?.name || 'None'
+          if (s1 !== s2) changes.push(`Shipping Address changed from "${s1}" to "${s2}"`)
+        } else {
+          changes.push(`${label} changed from "${v1}" to "${v2}"`)
+        }
+      }
+    })
+
+    // Compare lines
+    if (lines.length !== initialLines.length) {
+      changes.push(`Line items count changed from ${initialLines.length} to ${lines.length}`)
+    } else {
+      lines.forEach((line, i) => {
+        const init = initialLines[i]
+        if (!init) return
+        const diffs = []
+        if (String(line.description || '').trim() !== String(init.description || '').trim()) diffs.push('description')
+        if (Number(line.quantity || 0) !== Number(init.quantity || 0)) diffs.push('qty')
+        if (String(line.unit || '').trim() !== String(init.unit || '').trim()) diffs.push('unit')
+        if (Number(line.unit_price || 0) !== Number(init.unit_price || 0)) diffs.push('price')
+        if (Number(line.discount_amount || 0) !== Number(init.discount_amount || 0)) diffs.push('discount')
+
+        if (diffs.length > 0) {
+          changes.push(`Line ${i + 1} modified: ${diffs.join(', ')}`)
+        }
+      })
+    }
+
+    return changes
+  }
+
+  const blocker = useBlocker(({ currentValue, nextLocation }) => {
+    return initialForm && initialLines && getChanges().length > 0
+  })
 
   const loadInvoice = async () => {
     setLoading(true)
     const { data: inv } = await supabase.from('invoices').select('*').eq('id', id).single()
     const { data: invLines } = await supabase.from('invoice_lines').select('*').eq('invoice_id', id).order('sort_order')
     if (inv) {
-      setForm({
+      const loadedForm = {
         invoice_number: inv.invoice_number,
         invoice_date: inv.invoice_date,
         due_date: inv.due_date || calculateDueDate(inv.invoice_date),
@@ -72,8 +170,12 @@ export default function InvoiceForm() {
         customer_id: inv.customer_id || '',
         bank_detail_id: inv.bank_detail_id || '',
         shipping_address_id: inv.shipping_address_id || '',
-      })
+      }
+      setForm(loadedForm)
       setLines((invLines || []).map(l => ({ ...l, _id: Math.random().toString(36).slice(2) })))
+
+      setInitialForm(JSON.parse(JSON.stringify(loadedForm)))
+      setInitialLines((invLines || []).map(l => ({ ...JSON.parse(JSON.stringify(l)), _id: null })))
     }
     setLoading(false)
   }
@@ -156,6 +258,11 @@ export default function InvoiceForm() {
 
     setSaving(false)
     toast.success(`Invoice ${form.invoice_number} saved!`)
+
+    // Update initial state so blocker doesn't trigger
+    setInitialForm(JSON.parse(JSON.stringify(form)))
+    setInitialLines(lines.map(l => ({ ...JSON.parse(JSON.stringify(l)), _id: null })))
+
     if (andPreview) navigate(`/invoice/${invoiceId}/preview`)
     else navigate('/dashboard')
   }
@@ -169,6 +276,45 @@ export default function InvoiceForm() {
   return (
     <>
       <ToastContainer />
+
+      {blocker.state === 'blocked' && (
+        <div className="modal-overlay">
+          <div className="modal" style={{ maxWidth: 450 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, color: 'var(--warning)' }}>
+              <AlertTriangle size={24} />
+              <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text)' }}>Unsaved Changes</div>
+            </div>
+
+            <p style={{ fontSize: 14, color: 'var(--text2)', marginBottom: 16 }}>
+              You have unsaved changes. Are you sure you want to leave? Your changes will be lost.
+            </p>
+
+            <div style={{ background: 'var(--bg3)', borderRadius: 8, padding: 12, marginBottom: 20 }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text3)', textTransform: 'uppercase', marginBottom: 8, letterSpacing: '0.05em' }}>
+                Summary of changes:
+              </div>
+              <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, color: 'var(--text)', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {getChanges().length > 0 ? (
+                  getChanges().map((change, i) => (
+                    <li key={i}>{change}</li>
+                  ))
+                ) : (
+                  <li>Modified invoice details</li>
+                )}
+              </ul>
+            </div>
+
+            <div className="modal-actions">
+              <button className="btn btn-ghost" onClick={() => blocker.reset()}>
+                Stay and Edit
+              </button>
+              <button className="btn btn-danger" onClick={() => blocker.proceed()}>
+                Discard Changes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="page-header">
         <div>
           <div className="page-title">{isEdit ? `Edit ${form.invoice_number}` : 'New Invoice'}</div>

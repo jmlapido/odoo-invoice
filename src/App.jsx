@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from 'react-router-dom'
+import { createBrowserRouter, RouterProvider, Navigate } from 'react-router-dom'
 import { useAuth } from './context/AuthContext'
 import PasswordGate from './pages/PasswordGate'
 import Dashboard from './pages/Dashboard'
@@ -17,16 +17,40 @@ function ProtectedRoute({ children }) {
 export default function App() {
   const { authed } = useAuth()
 
-  return (
-    <Routes>
-      <Route path="/" element={authed ? <Navigate to="/dashboard" replace /> : <PasswordGate />} />
-      <Route path="/dashboard" element={<ProtectedRoute><Layout><Dashboard /></Layout></ProtectedRoute>} />
-      <Route path="/invoice/new" element={<ProtectedRoute><Layout><InvoiceForm /></Layout></ProtectedRoute>} />
-      <Route path="/invoice/:id/edit" element={<ProtectedRoute><Layout><InvoiceForm /></Layout></ProtectedRoute>} />
-      <Route path="/invoice/:id/preview" element={<ProtectedRoute><InvoicePreview /></ProtectedRoute>} />
-      <Route path="/customers" element={<ProtectedRoute><Layout><CustomersPage /></Layout></ProtectedRoute>} />
-      <Route path="/bank-details" element={<ProtectedRoute><Layout><BankDetailsPage /></Layout></ProtectedRoute>} />
-      <Route path="/shipping-addresses" element={<ProtectedRoute><Layout><ShippingAddressesPage /></Layout></ProtectedRoute>} />
-    </Routes>
-  )
+  const router = createBrowserRouter([
+    {
+      path: "/",
+      element: authed ? <Navigate to="/dashboard" replace /> : <PasswordGate />
+    },
+    {
+      path: "/dashboard",
+      element: <ProtectedRoute><Layout><Dashboard /></Layout></ProtectedRoute>
+    },
+    {
+      path: "/invoice/new",
+      element: <ProtectedRoute><Layout><InvoiceForm /></Layout></ProtectedRoute>
+    },
+    {
+      path: "/invoice/:id/edit",
+      element: <ProtectedRoute><Layout><InvoiceForm /></Layout></ProtectedRoute>
+    },
+    {
+      path: "/invoice/:id/preview",
+      element: <ProtectedRoute><InvoicePreview /></ProtectedRoute>
+    },
+    {
+      path: "/customers",
+      element: <ProtectedRoute><Layout><CustomersPage /></Layout></ProtectedRoute>
+    },
+    {
+      path: "/bank-details",
+      element: <ProtectedRoute><Layout><BankDetailsPage /></Layout></ProtectedRoute>
+    },
+    {
+      path: "/shipping-addresses",
+      element: <ProtectedRoute><Layout><ShippingAddressesPage /></Layout></ProtectedRoute>
+    },
+  ])
+
+  return <RouterProvider router={router} />
 }
